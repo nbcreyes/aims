@@ -1,0 +1,103 @@
+const { generatePDF } = require('../utils/pdf')
+const { receiptTemplate } = require('../utils/receiptTemplate')
+const { reportCardTemplate } = require('../utils/reportCardTemplate')
+const Payment = require('../models/Payment')
+const StudentFee = require('../models/StudentFee')
+const User = require('../models/User')
+const StudentRecord = require('../models/StudentRecord')
+const Semester = require('../models/Semester')
+const TermGrade = require('../models/TermGrade')
+const ClassSchedule = require('../models/ClassSchedule')
+
+const downloadReceipt = async (req, res) => {
+  try {
+    const payment = await Payment.findById(req.params.paymentId)
+      .populate('studentId', 'name email')
+      .populate('cashierId', 'name')
+
+    if (!payment) {
+      return res.status(404).json({ status: 'error', message: 'Payment not found' })
+    }
+
+    // Students can only download their own receipts
+    if (req.user.role === 'student' &&
+      payment.studentId._id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ status: 'error', message: 'Access denied' })
+    }
+
+    const fee = await StudentFee.findById(payment.studentFeeId)
+      .populate('semesterId', 'schoolYear term')
+
+    if (!fee) {
+      return res.status(404).json({ status: 'error', message: 'Fee record not found' })
+    }
+
+    const html = receiptTemplate(payment, fee, payment.studentId, payment.cashierId)
+    const pdf = await generatePDF(html)
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="receipt-${payment.receiptNo}.pdf"`,
+      'Content-Length': pdf.length
+    })
+
+    res.send(pdf)
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message })
+  }
+}
+
+const downloadReportCard = async (req, res) => {
+  try {
+    const { studentId, semesterId } = req.params
+
+    // Students can only download their own report card
+    if (req.user.role === 'student' && studentId !== req.user._id.toString()) {
+      return res.status(403).json({ status: 'error', message: 'Access denied' })
+    }
+
+    const student = await User.findById(studentId).select('-password')
+    if (!student) {
+      return res.status(404).json({ status: 'error', message: 'Student not found' })
+    }
+
+    const record = await StudentRecord.findOne({ studentId })
+      .populate('programId', 'name code')
+
+    const semester = await Semester.findById(semesterId)
+
+    const grades = await TermGrade.find({ studentId, semesterId })
+      .populate({
+        path: 'scheduleId',
+        populate: { path: 'subjectId', select: 'name code units' }
+      })
+
+    // Group by schedule
+    const grouped = {}
+    for (const g of grades) {
+      const key = g.scheduleId?._id?.toString()
+      if (!key) continue
+      if (!grouped[key]) {
+        grouped[key] = { schedule: g.scheduleId, terms: {} }
+      }
+      grouped[key].terms[g.term] = g
+    }
+
+    const gradeData = Object.values(grouped)
+
+    const html = reportCardTemplate(student, record, semester, gradeData)
+    const pdf = await generatePDF(html)
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="report-card-${student.name.replace(/\s+/g, '-')}-${semesterId}.pdf"`,
+      'Content-Length': pdf.length
+    })
+
+    res.send(pdf)
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message })
+  }
+}
+
+module.exports = { downloadReceipt, downloadReportCard }

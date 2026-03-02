@@ -29,8 +29,15 @@ import Announcements from "./pages/admin/Announcements";
 import StudentAnnouncements from "./pages/student/Announcements";
 import TeacherAnnouncements from "./pages/teacher/Announcements";
 import ParentAnnouncements from "./pages/parent/Announcements";
+import ParentGrades from "./pages/parent/Grades";
+import ParentAttendance from "./pages/parent/Attendance";
+import ParentFees from "./pages/parent/Fees";
+import UserManagement from "./pages/admin/UserManagement";
+import Subjects from "./pages/admin/Subjects";
+import Sections from "./pages/admin/Sections";
+import GuestRoute from "./components/shared/GuestRoute";
+import NotFound from './pages/NotFound'
 
-// Placeholder dashboards
 import RegistrarDashboard from "./pages/registrar/Dashboard";
 import CashierDashboard from "./pages/cashier/Dashboard";
 import TeacherDashboard from "./pages/teacher/Dashboard";
@@ -44,8 +51,31 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+
+          <Route
+            path="/login"
+            element={
+              <GuestRoute>
+                <Login />
+              </GuestRoute>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <GuestRoute>
+                <Register />
+              </GuestRoute>
+            }
+          />
+          <Route
+            path="/apply"
+            element={
+              <GuestRoute>
+                <Apply />
+              </GuestRoute>
+            }
+          />
           <Route path="/" element={<Navigate to="/login" replace />} />
 
           {/* Superadmin */}
@@ -57,6 +87,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/superadmin/programs"
             element={
@@ -67,6 +98,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/superadmin/semesters"
             element={
@@ -77,8 +109,41 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/superadmin/announcements"
+            element={
+              <ProtectedRoute roles={["superadmin", "registrar"]}>
+                <Announcements />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/registrar/announcements"
+            element={
+              <ProtectedRoute roles={["superadmin", "registrar"]}>
+                <Announcements />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* Other roles */}
+          <Route
+            path="/superadmin/subjects"
+            element={
+              <ProtectedRoute roles={["superadmin", "registrar"]}>
+                <Subjects />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/superadmin/sections"
+            element={
+              <ProtectedRoute roles={["superadmin", "registrar"]}>
+                <Sections />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Dashboards */}
           <Route
             path="/registrar/dashboard"
             element={
@@ -87,6 +152,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/cashier/dashboard"
             element={
@@ -95,6 +161,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/teacher/dashboard"
             element={
@@ -103,6 +170,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/student/dashboard"
             element={
@@ -111,6 +179,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/parent/dashboard"
             element={
@@ -120,7 +189,7 @@ function App() {
             }
           />
 
-          <Route path="/apply" element={<Apply />} />
+          {/* Registrar */}
           <Route
             path="/registrar/applications"
             element={
@@ -129,6 +198,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/registrar/enrollments"
             element={
@@ -137,6 +207,44 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          <Route
+            path="/registrar/scheduling"
+            element={
+              <ProtectedRoute roles={["superadmin", "registrar"]}>
+                <Scheduling />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/registrar/student-records"
+            element={
+              <ProtectedRoute roles={["superadmin", "registrar"]}>
+                <StudentRecords />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/registrar/attendance-reports"
+            element={
+              <ProtectedRoute roles={["superadmin", "registrar"]}>
+                <AttendanceReports />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/registrar/report-cards"
+            element={
+              <ProtectedRoute roles={["superadmin", "registrar"]}>
+                <ReportCards />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Student */}
           <Route
             path="/student/enrollment"
             element={
@@ -145,159 +253,173 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          <Route
+            path="/student/schedule"
+            element={
+              <ProtectedRoute roles={["student"]}>
+                <StudentSchedule />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/student/attendance"
+            element={
+              <ProtectedRoute roles={["student"]}>
+                <StudentAttendance />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/student/grades"
+            element={
+              <ProtectedRoute roles={["student"]}>
+                <StudentGrades />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/student/fees"
+            element={
+              <ProtectedRoute roles={["student"]}>
+                <StudentFees />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/student/announcements"
+            element={
+              <ProtectedRoute roles={["student"]}>
+                <StudentAnnouncements />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Teacher */}
+          <Route
+            path="/teacher/classes"
+            element={
+              <ProtectedRoute roles={["teacher"]}>
+                <TeacherClasses />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/teacher/attendance"
+            element={
+              <ProtectedRoute roles={["teacher"]}>
+                <TeacherAttendance />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/teacher/grades"
+            element={
+              <ProtectedRoute roles={["teacher"]}>
+                <TeacherGrades />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/teacher/announcements"
+            element={
+              <ProtectedRoute roles={["teacher"]}>
+                <TeacherAnnouncements />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Cashier */}
+          <Route
+            path="/cashier/fees"
+            element={
+              <ProtectedRoute roles={["superadmin", "cashier"]}>
+                <Fees />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/cashier/payments"
+            element={
+              <ProtectedRoute roles={["superadmin", "cashier"]}>
+                <Payments />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/cashier/receipts"
+            element={
+              <ProtectedRoute roles={["superadmin", "cashier"]}>
+                <Receipts />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/cashier/overdue"
+            element={
+              <ProtectedRoute roles={["superadmin", "cashier"]}>
+                <Overdue />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Parent */}
+          <Route
+            path="/parent/announcements"
+            element={
+              <ProtectedRoute roles={["parent"]}>
+                <ParentAnnouncements />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/parent/grades"
+            element={
+              <ProtectedRoute roles={["parent"]}>
+                <ParentGrades />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/parent/attendance"
+            element={
+              <ProtectedRoute roles={["parent"]}>
+                <ParentAttendance />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/parent/fees"
+            element={
+              <ProtectedRoute roles={["parent"]}>
+                <ParentFees />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/superadmin/users"
+            element={
+              <ProtectedRoute roles={["superadmin"]}>
+                <UserManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<NotFound />} />
         </Routes>
-        <Route
-          path="/registrar/scheduling"
-          element={
-            <ProtectedRoute roles={["superadmin", "registrar"]}>
-              <Scheduling />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/teacher/classes"
-          element={
-            <ProtectedRoute roles={["teacher"]}>
-              <TeacherClasses />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/student/schedule"
-          element={
-            <ProtectedRoute roles={["student"]}>
-              <StudentSchedule />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/registrar/student-records"
-          element={
-            <ProtectedRoute roles={["superadmin", "registrar"]}>
-              <StudentRecords />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/teacher/attendance"
-          element={
-            <ProtectedRoute roles={["teacher"]}>
-              <TeacherAttendance />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/registrar/attendance-reports"
-          element={
-            <ProtectedRoute roles={["superadmin", "registrar"]}>
-              <AttendanceReports />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/student/attendance"
-          element={
-            <ProtectedRoute roles={["student"]}>
-              <StudentAttendance />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/teacher/grades"
-          element={
-            <ProtectedRoute roles={["teacher"]}>
-              <TeacherGrades />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/student/grades"
-          element={
-            <ProtectedRoute roles={["student"]}>
-              <StudentGrades />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/registrar/report-cards"
-          element={
-            <ProtectedRoute roles={["superadmin", "registrar"]}>
-              <ReportCards />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/cashier/fees"
-          element={
-            <ProtectedRoute roles={["superadmin", "cashier"]}>
-              <Fees />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/cashier/payments"
-          element={
-            <ProtectedRoute roles={["superadmin", "cashier"]}>
-              <Payments />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/cashier/receipts"
-          element={
-            <ProtectedRoute roles={["superadmin", "cashier"]}>
-              <Receipts />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/cashier/overdue"
-          element={
-            <ProtectedRoute roles={["superadmin", "cashier"]}>
-              <Overdue />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/student/fees"
-          element={
-            <ProtectedRoute roles={["student"]}>
-              <StudentFees />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/superadmin/announcements"
-          element={
-            <ProtectedRoute roles={["superadmin", "registrar"]}>
-              <Announcements />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/student/announcements"
-          element={
-            <ProtectedRoute roles={["student"]}>
-              <StudentAnnouncements />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/teacher/announcements"
-          element={
-            <ProtectedRoute roles={["teacher"]}>
-              <TeacherAnnouncements />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/parent/announcements"
-          element={
-            <ProtectedRoute roles={["parent"]}>
-              <ParentAnnouncements />
-            </ProtectedRoute>
-          }
-        />
       </AuthProvider>
     </BrowserRouter>
   );

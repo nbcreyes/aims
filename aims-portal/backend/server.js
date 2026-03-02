@@ -10,6 +10,8 @@ connectDB()
 
 app.use(corsMiddleware)
 app.use(express.json())
+const path = require('path')
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 app.use(cookieParser())
 
 app.get('/api/health', (req, res) => {
@@ -31,6 +33,9 @@ app.use('/api/grades', require('./src/routes/grades'))
 app.use('/api/fees', require('./src/routes/fees'))
 app.use('/api/payments', require('./src/routes/payments'))
 app.use('/api/announcements', require('./src/routes/announcements'))
+app.use('/api/notifications', require('./src/routes/notifications'))
+app.use('/api/parent', require('./src/routes/parent'))
+app.use('/api/pdf', require('./src/routes/pdf'))
 
 const PORT = process.env.PORT || 5000
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`))

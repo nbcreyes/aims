@@ -20,18 +20,38 @@ const register = async (req, res) => {
   try {
     const { name, email, password, role } = req.body
 
+    // 🔒 Roles that cannot self-register — must be created by superadmin
+    const restrictedRoles = ['superadmin', 'registrar', 'cashier', 'student']
+    if (restrictedRoles.includes(role)) {
+      return res.status(403).json({
+        status: 'error',
+        message: role === 'student'
+      ? 'Student accounts are created through the admissions process.'
+      : `The role "${role}" cannot self-register. Contact the administrator.`
+      })
+    }
+
     if (!name || !email || !password || !role) {
-      return res.status(400).json({ status: 'error', message: 'All fields are required' })
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'All fields are required' 
+      })
     }
 
     const validRoles = ['superadmin', 'registrar', 'cashier', 'teacher', 'student', 'parent']
     if (!validRoles.includes(role)) {
-      return res.status(400).json({ status: 'error', message: 'Invalid role' })
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'Invalid role' 
+      })
     }
 
     const existing = await User.findOne({ email })
     if (existing) {
-      return res.status(400).json({ status: 'error', message: 'Email already in use' })
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'Email already in use' 
+      })
     }
 
     const hashed = await bcrypt.hash(password, 10)
@@ -61,21 +81,33 @@ const login = async (req, res) => {
     const { email, password } = req.body
 
     if (!email || !password) {
-      return res.status(400).json({ status: 'error', message: 'Email and password are required' })
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'Email and password are required' 
+      })
     }
 
     const user = await User.findOne({ email })
     if (!user) {
-      return res.status(401).json({ status: 'error', message: 'Invalid credentials' })
+      return res.status(401).json({ 
+        status: 'error', 
+        message: 'Invalid credentials' 
+      })
     }
 
     if (user.status === 'inactive') {
-      return res.status(403).json({ status: 'error', message: 'Account is inactive' })
+      return res.status(403).json({ 
+        status: 'error', 
+        message: 'Account is inactive' 
+      })
     }
 
     const match = await bcrypt.compare(password, user.password)
     if (!match) {
-      return res.status(401).json({ status: 'error', message: 'Invalid credentials' })
+      return res.status(401).json({ 
+        status: 'error', 
+        message: 'Invalid credentials' 
+      })
     }
 
     const token = generateToken(user._id)
@@ -108,7 +140,11 @@ const logout = (req, res) => {
 const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('-password')
-    res.json({ status: 'success', message: 'User fetched', data: user })
+    res.json({ 
+      status: 'success', 
+      message: 'User fetched', 
+      data: user 
+    })
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message })
   }

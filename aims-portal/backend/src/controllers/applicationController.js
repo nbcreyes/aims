@@ -3,9 +3,8 @@ const User = require('../models/User')
 const UserProfile = require('../models/UserProfile')
 const StudentRecord = require('../models/StudentRecord')
 const bcrypt = require('bcryptjs')
-const { uploadFile } = require('../utils/cloudinary')
+const { notify } = require('../utils/notify')
 
-// Generate student number: e.g. 2024-0001
 const generateStudentNo = async () => {
   const year = new Date().getFullYear()
   const count = await StudentRecord.countDocuments()
@@ -52,35 +51,59 @@ const submitApplication = async (req, res) => {
     const { name, email, phone, address, birthdate, programId, semesterId } = req.body
 
     if (!name || !email || !programId || !semesterId) {
-      return res.status(400).json({ status: 'error', message: 'Name, email, program, and semester are required' })
+      return res.status(400).json({
+        status: 'error',
+        message: 'Name, email, program, and semester are required'
+      })
     }
 
-    // Prevent duplicate applications for same email + semester
     const existing = await Application.findOne({ email, semesterId })
     if (existing) {
-      return res.status(400).json({ status: 'error', message: 'An application for this semester already exists for this email' })
+      return res.status(400).json({
+        status: 'error',
+        message: 'An application for this semester already exists for this email'
+      })
     }
 
-    // Check if email already has a student account
     const existingUser = await User.findOne({ email, role: 'student' })
     if (existingUser) {
-      return res.status(400).json({ status: 'error', message: 'This email is already registered as a student' })
+      return res.status(400).json({
+        status: 'error',
+        message: 'This email is already registered as a student'
+      })
     }
 
-    // Handle document uploads
+    // Build documents from uploaded files
     const documents = []
-    if (req.files && req.files.length > 0) {
-      for (const file of req.files) {
-        const url = await uploadFile(file.path)
-        documents.push({ docType: file.fieldname, fileUrl: url })
+    const docTypes = ['form138', 'birthCertificate', 'goodMoral', 'validId']
+
+    for (const docType of docTypes) {
+      if (req.files && req.files[docType] && req.files[docType][0]) {
+        const file = req.files[docType][0]
+        documents.push({
+          docType,
+          fileUrl: `/uploads/${file.filename}`,
+          publicId: file.filename
+        })
       }
     }
 
     const application = await Application.create({
-      name, email, phone, address, birthdate, programId, semesterId, documents
+      name,
+      email,
+      phone,
+      address,
+      birthdate,
+      programId,
+      semesterId,
+      documents
     })
 
-    res.status(201).json({ status: 'success', message: 'Application submitted successfully', data: application })
+    res.status(201).json({
+      status: 'success',
+      message: 'Application submitted successfully',
+      data: application
+    })
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message })
   }
@@ -103,14 +126,16 @@ const updateApplicationStatus = async (req, res) => {
     }
 
     if (application.status === 'accepted') {
-      return res.status(400).json({ status: 'error', message: 'Application has already been accepted' })
+      return res.status(400).json({
+        status: 'error',
+        message: 'Application has already been accepted'
+      })
     }
 
     application.status = status
     if (remarks) application.remarks = remarks
     await application.save()
 
-    // On acceptance — create student user account and student record
     if (status === 'accepted') {
       const existingUser = await User.findOne({ email: application.email })
       if (!existingUser) {
@@ -121,7 +146,8 @@ const updateApplicationStatus = async (req, res) => {
           name: application.name,
           email: application.email,
           password: hashed,
-          role: 'student'
+          role: 'student',
+          status: 'active'
         })
 
         await UserProfile.create({
@@ -132,12 +158,19 @@ const updateApplicationStatus = async (req, res) => {
         })
 
         const studentNo = await generateStudentNo()
+
         await StudentRecord.create({
           studentId: newUser._id,
           programId: application.programId._id,
           yearLevel: 1,
           studentNo
         })
+
+        await notify(
+          newUser._id,
+          'Application Accepted',
+          `Congratulations! Your application has been accepted. Your student number is ${studentNo}. Your temporary password is: ${tempPassword}. Please log in and change your password immediately.`
+        )
 
         return res.json({
           status: 'success',
@@ -147,7 +180,20 @@ const updateApplicationStatus = async (req, res) => {
       }
     }
 
-    res.json({ status: 'success', message: `Application status updated to ${status}`, data: application })
+    const applicantUser = await User.findOne({ email: application.email })
+    if (applicantUser) {
+      await notify(
+        applicantUser._id,
+        `Application ${status.replace('_', ' ')}`,
+        `Your application status has been updated to: ${status.replace('_', ' ')}.${remarks ? ' Remarks: ' + remarks : ''}`
+      )
+    }
+
+    res.json({
+      status: 'success',
+      message: `Application status updated to ${status}`,
+      data: application
+    })
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message })
   }
@@ -156,12 +202,16 @@ const updateApplicationStatus = async (req, res) => {
 const deleteApplication = async (req, res) => {
   try {
     const application = await Application.findById(req.params.id)
+
     if (!application) {
       return res.status(404).json({ status: 'error', message: 'Application not found' })
     }
 
     if (application.status === 'accepted') {
-      return res.status(400).json({ status: 'error', message: 'Cannot delete an accepted application' })
+      return res.status(400).json({
+        status: 'error',
+        message: 'Cannot delete an accepted application'
+      })
     }
 
     await Application.findByIdAndDelete(req.params.id)

@@ -10,7 +10,7 @@ const ROLE_HOME = {
   parent: '/parent/dashboard'
 }
 
-export default function ProtectedRoute({ children, roles }) {
+export default function GuestRoute({ children }) {
   const { user, loading } = useAuth()
 
   if (loading) {
@@ -21,14 +21,8 @@ export default function ProtectedRoute({ children, roles }) {
     )
   }
 
-  // Not logged in — send to login
-  if (!user) {
-    return <Navigate to="/login" replace />
-  }
-
-  // Logged in but wrong role — send to their own dashboard
-  if (roles && !roles.includes(user.role)) {
-    return <Navigate to={ROLE_HOME[user.role] || '/login'} replace />
+  if (user) {
+    return <Navigate to={ROLE_HOME[user.role] || '/'} replace />
   }
 
   return children
