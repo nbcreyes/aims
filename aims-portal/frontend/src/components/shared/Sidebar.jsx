@@ -14,7 +14,8 @@ const navItems = {
     { label: 'Applications', path: '/registrar/applications' },
     { label: 'Enrollments', path: '/registrar/enrollments' },
     { label: 'Scheduling', path: '/registrar/scheduling' },
-    { label: 'Student Records', path: '/registrar/student-records' }
+    { label: 'Student Records', path: '/registrar/student-records' },
+    { label: 'AttendaceReports', path: '/registrar/attendance-reports' },
   ],
   cashier: [
     { label: 'Dashboard', path: '/cashier/dashboard' },

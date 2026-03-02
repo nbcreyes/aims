@@ -26,6 +26,11 @@ app.use('/api/enrollments', require('./src/routes/enrollments'))
 app.use('/api/schedules', require('./src/routes/schedules'))
 app.use('/api/users', require('./src/routes/users'))
 app.use('/api/students', require('./src/routes/students'))
+app.use('/api/attendance', require('./src/routes/attendance'))
+app.use('/api/grades', require('./src/routes/grades'))
+app.use('/api/fees', require('./src/routes/fees'))
+app.use('/api/payments', require('./src/routes/payments'))
+app.use('/api/announcements', require('./src/routes/announcements'))
 
 const PORT = process.env.PORT || 5000
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`))
