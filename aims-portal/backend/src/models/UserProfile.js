@@ -5,8 +5,9 @@ const userProfileSchema = new mongoose.Schema({
   phone: { type: String, default: '' },
   address: { type: String, default: '' },
   birthdate: { type: Date },
-  photo: { type: String, default: '' },
-  parentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
+  bio: { type: String, default: '' },
+  avatar: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now }
 })
 
 module.exports = mongoose.model('UserProfile', userProfileSchema)

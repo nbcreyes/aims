@@ -29,12 +29,24 @@ const createSemester = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'All fields are required' })
     }
 
-    // Only one active semester allowed
+    const validTerms = ['1st Semester', '2nd Semester', 'Summer']
+    if (!validTerms.includes(term)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Term must be 1st Semester, 2nd Semester, or Summer'
+      })
+    }
+
+    // Only one active semester at a time
     if (isActive) {
       await Semester.updateMany({}, { isActive: false })
     }
 
-    const semester = await Semester.create({ schoolYear, term, startDate, endDate, isActive: isActive || false })
+    const semester = await Semester.create({
+      schoolYear, term, startDate, endDate,
+      isActive: isActive || false
+    })
+
     res.status(201).json({ status: 'success', message: 'Semester created', data: semester })
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message })
@@ -48,12 +60,15 @@ const updateSemester = async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'Semester not found' })
     }
 
-    // Only one active semester allowed
     if (req.body.isActive) {
       await Semester.updateMany({ _id: { $ne: req.params.id } }, { isActive: false })
     }
 
-    const updated = await Semester.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
+    const updated = await Semester.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    )
     res.json({ status: 'success', message: 'Semester updated', data: updated })
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message })
@@ -74,4 +89,10 @@ const deleteSemester = async (req, res) => {
   }
 }
 
-module.exports = { getSemesters, getActiveSemester, createSemester, updateSemester, deleteSemester }
+module.exports = {
+  getSemesters,
+  getActiveSemester,
+  createSemester,
+  updateSemester,
+  deleteSemester
+}

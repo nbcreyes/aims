@@ -3,6 +3,7 @@ const express = require('express')
 const cookieParser = require('cookie-parser')
 const connectDB = require('./src/config/db')
 const corsMiddleware = require('./src/middleware/cors')
+const { autoLockGrades } = require('./src/utils/gradeLock')
 
 const app = express()
 
@@ -36,6 +37,11 @@ app.use('/api/announcements', require('./src/routes/announcements'))
 app.use('/api/notifications', require('./src/routes/notifications'))
 app.use('/api/parent', require('./src/routes/parent'))
 app.use('/api/pdf', require('./src/routes/pdf'))
+app.use('/api/departments', require('./src/routes/departments'))
+app.use('/api/curriculum', require('./src/routes/curriculum'))
+
+autoLockGrades()
+setInterval(autoLockGrades, 60 * 60 * 1000)
 
 const PORT = process.env.PORT || 5000
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`))

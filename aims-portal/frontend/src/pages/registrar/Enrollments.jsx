@@ -2,201 +2,211 @@ import { useState, useEffect } from 'react'
 import api from '../../utils/api'
 import DashboardLayout from '../../components/shared/DashboardLayout'
 
-const STATUS_COLORS = {
-  pending: 'bg-yellow-100 text-yellow-700',
-  approved: 'bg-green-100 text-green-700',
-  rejected: 'bg-red-100 text-red-700',
-  dropped: 'bg-gray-100 text-gray-500'
-}
-
 export default function Enrollments() {
   const [enrollments, setEnrollments] = useState([])
   const [semesters, setSemesters] = useState([])
-  const [selected, setSelected] = useState(null)
-  const [filter, setFilter] = useState({ status: 'all', semesterId: '' })
+  const [selectedSemester, setSelectedSemester] = useState('')
+  const [filterStatus, setFilterStatus] = useState('pending')
+  const [search, setSearch] = useState('')
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const fetchSemesters = async () => {
-    try {
-      const res = await api.get('/semesters')
+  useEffect(() => {
+    api.get('/semesters').then(res => {
       setSemesters(res.data.data)
-    } catch { }
-  }
+      const active = res.data.data.find(s => s.isActive)
+      if (active) setSelectedSemester(active._id)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (selectedSemester) fetchEnrollments()
+  }, [selectedSemester, filterStatus])
 
   const fetchEnrollments = async () => {
+    setLoading(true)
     try {
-      const params = new URLSearchParams()
-      if (filter.status !== 'all') params.append('status', filter.status)
-      if (filter.semesterId) params.append('semesterId', filter.semesterId)
-
-      const res = await api.get(`/enrollments?${params.toString()}`)
+      const params = new URLSearchParams({ semesterId: selectedSemester })
+      if (filterStatus !== 'all') params.append('status', filterStatus)
+      const res = await api.get(`/enrollments?${params}`)
       setEnrollments(res.data.data)
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch enrollments')
-    }
-  }
-
-  useEffect(() => { fetchSemesters() }, [])
-  useEffect(() => { fetchEnrollments() }, [filter])
-
-  const handleStatusUpdate = async (id, status) => {
-    if (!confirm(`Set enrollment status to "${status}"?`)) return
-    setLoading(true)
-    try {
-      await api.put(`/enrollments/${id}/status`, { status })
-      fetchEnrollments()
-      setSelected(null)
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update status')
     } finally {
       setLoading(false)
     }
   }
 
+  const handleAction = async (id, status) => {
+    try {
+      await api.put(`/enrollments/${id}`, { status })
+      setSuccess(`Enrollment ${status}`)
+      fetchEnrollments()
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update enrollment')
+    }
+  }
+
+  const handleBulkApprove = async () => {
+    const pendingIds = enrollments
+      .filter(e => e.status === 'pending')
+      .map(e => e._id)
+
+    if (!pendingIds.length) {
+      setError('No pending enrollments to approve')
+      return
+    }
+
+    if (!confirm(`Approve all ${pendingIds.length} pending enrollments?`)) return
+
+    try {
+      await api.put('/enrollments/bulk', { enrollmentIds: pendingIds, status: 'approved' })
+      setSuccess(`${pendingIds.length} enrollments approved`)
+      fetchEnrollments()
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to bulk approve')
+    }
+  }
+
+  const filtered = enrollments.filter(e =>
+    e.studentId?.name?.toLowerCase().includes(search.toLowerCase()) ||
+    e.scheduleId?.subjectId?.code?.toLowerCase().includes(search.toLowerCase())
+  )
+
+  // Group by student
+  const grouped = filtered.reduce((acc, e) => {
+    const key = e.studentId?._id
+    if (!acc[key]) {
+      acc[key] = { student: e.studentId, enrollments: [] }
+    }
+    acc[key].enrollments.push(e)
+    return acc
+  }, {})
+
   return (
     <DashboardLayout>
       <div className="p-6">
-        <h1 className="text-xl font-bold text-gray-800 mb-6">Enrollments</h1>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-xl font-bold text-gray-800">Enrollments</h1>
+          {filterStatus === 'pending' && (
+            <button
+              onClick={handleBulkApprove}
+              className="bg-green-600 text-white px-4 py-2 rounded-md text-sm hover:bg-green-700"
+            >
+              Approve All Pending
+            </button>
+          )}
+        </div>
 
         {error && <div className="bg-red-50 text-red-700 text-sm px-4 py-3 rounded mb-4 border border-red-200">{error}</div>}
+        {success && <div className="bg-green-50 text-green-700 text-sm px-4 py-3 rounded mb-4 border border-green-200">{success}</div>}
 
         {/* Filters */}
-        <div className="flex flex-wrap gap-3 mb-4">
+        <div className="flex gap-3 mb-6 flex-wrap">
           <select
-            value={filter.semesterId}
-            onChange={(e) => setFilter({ ...filter, semesterId: e.target.value })}
+            value={selectedSemester}
+            onChange={(e) => setSelectedSemester(e.target.value)}
             className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="">All Semesters</option>
+            <option value="">Select semester</option>
             {semesters.map(s => (
               <option key={s._id} value={s._id}>{s.schoolYear} — {s.term}</option>
             ))}
           </select>
 
-          <div className="flex gap-2">
-            {['all', 'pending', 'approved', 'rejected', 'dropped'].map(s => (
-              <button
-                key={s}
-                onClick={() => setFilter({ ...filter, status: s })}
-                className={`px-3 py-1.5 text-xs rounded-md font-medium border ${filter.status === s ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
-              >
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-              </button>
-            ))}
-          </div>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="dropped">Dropped</option>
+          </select>
+
+          <input
+            type="text"
+            placeholder="Search student or subject..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-56"
+          />
         </div>
 
-        {/* Table */}
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden mb-6">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                {['Student', 'Program', 'Year Level', 'Semester', 'Subjects', 'Status', 'Enrolled', 'Actions'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-600">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {enrollments.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-400 text-sm">No enrollments found</td></tr>
-              ) : enrollments.map(e => (
-                <tr key={e._id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-gray-800">{e.studentId?.name}</p>
-                    <p className="text-xs text-gray-400">{e.studentId?.email}</p>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{e.programId?.code}</td>
-                  <td className="px-4 py-3 text-gray-600">Year {e.yearLevel}</td>
-                  <td className="px-4 py-3 text-gray-600">{e.semesterId?.schoolYear} {e.semesterId?.term}</td>
-                  <td className="px-4 py-3 text-gray-600">{e.subjects?.length} subjects</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[e.status]}`}>
-                      {e.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">{new Date(e.enrolledAt).toLocaleDateString()}</td>
-                  <td className="px-4 py-3">
-                    <button onClick={() => setSelected(e)} className="text-blue-600 hover:underline text-xs">View</button>
-                  </td>
+        {loading ? (
+          <div className="bg-white border border-gray-200 rounded-lg px-6 py-8 text-center">
+            <p className="text-sm text-gray-400">Loading enrollments...</p>
+          </div>
+        ) : Object.values(grouped).length === 0 ? (
+          <div className="bg-white border border-gray-200 rounded-lg px-6 py-8 text-center">
+            <p className="text-sm text-gray-400">No enrollments found</p>
+          </div>
+        ) : Object.values(grouped).map(({ student, enrollments: studentEnrollments }) => (
+          <div key={student?._id} className="bg-white border border-gray-200 rounded-lg overflow-hidden mb-4">
+            <div className="bg-gray-50 border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">{student?.name}</p>
+                <p className="text-xs text-gray-400">{student?.email}</p>
+              </div>
+              <p className="text-xs text-gray-500">{studentEnrollments.length} subject(s)</p>
+            </div>
+            <table className="w-full text-sm">
+              <thead className="border-b border-gray-100">
+                <tr>
+                  {['Subject', 'Section', 'Teacher', 'Schedule', 'Units', 'Status', 'Actions'].map(h => (
+                    <th key={h} className="text-left px-4 py-2 text-xs font-semibold text-gray-500">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Detail Panel */}
-        {selected && (
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-gray-700">
-                Enrollment — {selected.studentId?.name}
-              </h2>
-              <button onClick={() => setSelected(null)} className="text-xs text-gray-400 hover:text-gray-600">Close</button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 text-sm mb-4">
-              <div><span className="text-gray-500">Program:</span> <span className="text-gray-800">{selected.programId?.name}</span></div>
-              <div><span className="text-gray-500">Year Level:</span> <span className="text-gray-800">Year {selected.yearLevel}</span></div>
-              <div><span className="text-gray-500">Semester:</span> <span className="text-gray-800">{selected.semesterId?.schoolYear} {selected.semesterId?.term}</span></div>
-              <div><span className="text-gray-500">Status:</span> <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[selected.status]}`}>{selected.status}</span></div>
-            </div>
-
-            <div className="mb-4">
-              <p className="text-xs font-semibold text-gray-600 mb-2">Subjects</p>
-              <div className="border border-gray-100 rounded-md overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      {['Code', 'Subject', 'Units', 'Teacher', 'Schedule'].map(h => (
-                        <th key={h} className="text-left px-3 py-2 text-gray-500 font-medium">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {selected.subjects?.map(s => (
-                      <tr key={s._id}>
-                        <td className="px-3 py-2 text-gray-700">{s.subjectId?.code}</td>
-                        <td className="px-3 py-2 text-gray-700">{s.subjectId?.name}</td>
-                        <td className="px-3 py-2 text-gray-600">{s.subjectId?.units}</td>
-                        <td className="px-3 py-2 text-gray-600">{s.teacherId?.name || '—'}</td>
-                        <td className="px-3 py-2 text-gray-600">{s.day} {s.timeStart}–{s.timeEnd}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {selected.status === 'pending' && (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleStatusUpdate(selected._id, 'approved')}
-                  disabled={loading}
-                  className="bg-green-600 text-white px-4 py-2 rounded-md text-sm hover:bg-green-700 disabled:opacity-50"
-                >
-                  Approve
-                </button>
-                <button
-                  onClick={() => handleStatusUpdate(selected._id, 'rejected')}
-                  disabled={loading}
-                  className="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700 disabled:opacity-50"
-                >
-                  Reject
-                </button>
-              </div>
-            )}
-            {selected.status === 'approved' && (
-              <button
-                onClick={() => handleStatusUpdate(selected._id, 'dropped')}
-                disabled={loading}
-                className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm hover:bg-gray-700 disabled:opacity-50"
-              >
-                Mark as Dropped
-              </button>
-            )}
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {studentEnrollments.map(e => (
+                  <tr key={e._id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-gray-800">{e.scheduleId?.subjectId?.code}</p>
+                      <p className="text-xs text-gray-400">{e.scheduleId?.subjectId?.name}</p>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-600">{e.scheduleId?.sectionId?.name}</td>
+                    <td className="px-4 py-3 text-xs text-gray-600">{e.scheduleId?.teacherId?.name}</td>
+                    <td className="px-4 py-3 text-xs text-gray-600">
+                      <p>{e.scheduleId?.day}</p>
+                      <p>{e.scheduleId?.timeStart} — {e.scheduleId?.timeEnd}</p>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-600 text-center">
+                      {e.scheduleId?.subjectId?.units}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                        e.status === 'approved' ? 'bg-green-100 text-green-700' :
+                        e.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                        e.status === 'dropped' ? 'bg-gray-100 text-gray-500' :
+                        'bg-red-100 text-red-700'
+                      }`}>
+                        {e.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 space-x-2">
+                      {e.status === 'pending' && (
+                        <>
+                          <button onClick={() => handleAction(e._id, 'approved')}
+                            className="text-green-600 hover:underline text-xs">Approve</button>
+                          <button onClick={() => handleAction(e._id, 'rejected')}
+                            className="text-red-600 hover:underline text-xs">Reject</button>
+                        </>
+                      )}
+                      {e.status === 'approved' && (
+                        <button onClick={() => handleAction(e._id, 'dropped')}
+                          className="text-orange-600 hover:underline text-xs">Drop</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
+        ))}
       </div>
     </DashboardLayout>
   )

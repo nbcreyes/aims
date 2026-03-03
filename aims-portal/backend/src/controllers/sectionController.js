@@ -36,14 +36,45 @@ const getSection = async (req, res) => {
 
 const createSection = async (req, res) => {
   try {
-    const { programId, semesterId, yearLevel, name } = req.body
+    const { programId, semesterId, yearLevel, sectionNumber, capacity } = req.body
 
-    if (!programId || !semesterId || !yearLevel || !name) {
-      return res.status(400).json({ status: 'error', message: 'All fields are required' })
+    if (!programId || !semesterId || !yearLevel || !sectionNumber) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Program, semester, year level, and section number are required'
+      })
     }
 
-    const section = await Section.create({ programId, semesterId, yearLevel, name })
-    res.status(201).json({ status: 'success', message: 'Section created', data: section })
+    // Check for duplicate
+    const existing = await Section.findOne({
+      programId, semesterId, yearLevel, sectionNumber
+    })
+    if (existing) {
+      return res.status(400).json({
+        status: 'error',
+        message: `Section ${existing.name} already exists`
+      })
+    }
+
+    const section = new Section({
+      programId,
+      semesterId,
+      yearLevel,
+      sectionNumber,
+      capacity: capacity || 40
+    })
+
+    await section.save() // triggers pre-save hook to generate name
+
+    const populated = await Section.findById(section._id)
+      .populate('programId', 'name code')
+      .populate('semesterId', 'schoolYear term')
+
+    res.status(201).json({
+      status: 'success',
+      message: `Section ${section.name} created`,
+      data: populated
+    })
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message })
   }
@@ -56,8 +87,22 @@ const updateSection = async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'Section not found' })
     }
 
-    const updated = await Section.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
-    res.json({ status: 'success', message: 'Section updated', data: updated })
+    // Update allowed fields
+    const { capacity, status, sectionNumber } = req.body
+    if (capacity) section.capacity = capacity
+    if (status) section.status = status
+    if (sectionNumber) {
+      section.sectionNumber = sectionNumber
+      section.name = undefined // force regeneration
+    }
+
+    await section.save()
+
+    const populated = await Section.findById(section._id)
+      .populate('programId', 'name code')
+      .populate('semesterId', 'schoolYear term')
+
+    res.json({ status: 'success', message: 'Section updated', data: populated })
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message })
   }
@@ -70,6 +115,16 @@ const deleteSection = async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'Section not found' })
     }
 
+    // Check if any schedules use this section
+    const Schedule = require('../models/Schedule')
+    const scheduleCount = await Schedule.countDocuments({ sectionId: req.params.id })
+    if (scheduleCount > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: `Cannot delete — ${scheduleCount} schedule(s) use this section`
+      })
+    }
+
     await Section.findByIdAndDelete(req.params.id)
     res.json({ status: 'success', message: 'Section deleted', data: null })
   } catch (error) {
@@ -77,4 +132,10 @@ const deleteSection = async (req, res) => {
   }
 }
 
-module.exports = { getSections, getSection, createSection, updateSection, deleteSection }
+module.exports = {
+  getSections,
+  getSection,
+  createSection,
+  updateSection,
+  deleteSection
+}

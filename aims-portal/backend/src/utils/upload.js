@@ -10,37 +10,61 @@ if (!fs.existsSync(uploadDir)) {
 const sanitize = (str) => {
   return str
     .toLowerCase()
-    .replace(/\s+/g, '-')       // spaces to hyphens
-    .replace(/[^a-z0-9-]/g, '') // remove special characters
-    .replace(/-+/g, '-')        // collapse multiple hyphens
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
     .trim()
 }
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir)
-  },
+// Document upload storage
+const documentStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase()
     const docType = sanitize(file.fieldname)
     const studentName = req.body.name ? sanitize(req.body.name) : 'applicant'
     const timestamp = Date.now()
-    const filename = `${docType}-${studentName}-${timestamp}${ext}`
-    cb(null, filename)
+    cb(null, `${docType}-${studentName}-${timestamp}${ext}`)
   }
 })
+
+// Avatar upload storage
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase()
+    cb(null, `avatar-${req.user._id}-${Date.now()}${ext}`)
+  }
+})
+
+const documentFilter = (req, file, cb) => {
+  const allowed = ['image/jpeg', 'image/png', 'application/pdf']
+  if (allowed.includes(file.mimetype)) {
+    cb(null, true)
+  } else {
+    cb(new Error('Only JPG, PNG, and PDF files are allowed'), false)
+  }
+}
+
+const avatarFilter = (req, file, cb) => {
+  const allowed = ['image/jpeg', 'image/png', 'image/webp']
+  if (allowed.includes(file.mimetype)) {
+    cb(null, true)
+  } else {
+    cb(new Error('Only JPG, PNG, and WEBP images are allowed'), false)
+  }
+}
 
 const upload = multer({
-  storage,
+  storage: documentStorage,
   limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/png', 'application/pdf']
-    if (allowed.includes(file.mimetype)) {
-      cb(null, true)
-    } else {
-      cb(new Error('Only JPG, PNG, and PDF files are allowed'), false)
-    }
-  }
+  fileFilter: documentFilter
 })
 
-module.exports = { upload }
+const uploadAvatar = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: avatarFilter
+})
+
+module.exports = { upload, uploadAvatar }

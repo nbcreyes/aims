@@ -1,8 +1,10 @@
 const { generatePDF } = require('../utils/pdf')
 const { receiptTemplate } = require('../utils/receiptTemplate')
 const { reportCardTemplate } = require('../utils/reportCardTemplate')
-const Payment = require('../models/Payment')
+const { corTemplate } = require('../utils/corTemplate')
+const Enrollment = require('../models/Enrollment')
 const StudentFee = require('../models/StudentFee')
+const Payment = require('../models/Payment')
 const User = require('../models/User')
 const StudentRecord = require('../models/StudentRecord')
 const Semester = require('../models/Semester')
@@ -100,4 +102,67 @@ const downloadReportCard = async (req, res) => {
   }
 }
 
-module.exports = { downloadReceipt, downloadReportCard }
+const downloadCOR = async (req, res) => {
+  try {
+    const { studentId, semesterId } = req.params
+
+    // Students can only download their own COR
+    if (req.user.role === 'student' && studentId !== req.user._id.toString()) {
+      return res.status(403).json({ status: 'error', message: 'Access denied' })
+    }
+
+    const student = await User.findById(studentId).select('-password')
+    if (!student) {
+      return res.status(404).json({ status: 'error', message: 'Student not found' })
+    }
+
+    const record = await StudentRecord.findOne({ studentId })
+      .populate('programId', 'name code')
+
+    const semester = await Semester.findById(semesterId)
+    if (!semester) {
+      return res.status(404).json({ status: 'error', message: 'Semester not found' })
+    }
+
+    // Get approved enrollments with full schedule/subject/teacher data
+    const enrollments = await Enrollment.find({
+      studentId,
+      semesterId,
+      status: 'approved'
+    }).populate({
+      path: 'scheduleId',
+      populate: [
+        { path: 'subjectId', select: 'name code units' },
+        { path: 'teacherId', select: 'name' }
+      ]
+    })
+
+    if (!enrollments.length) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'No approved enrollments found for this semester'
+      })
+    }
+
+    // Get fee record
+    const fee = await StudentFee.findOne({ studentId, semesterId })
+      .populate('semesterId', 'schoolYear term')
+
+    const html = corTemplate(student, record, semester, enrollments, fee)
+    const pdf = await generatePDF(html)
+
+    const filename = `COR-${record?.studentNo || studentId}-${semester.schoolYear}-${semester.term.replace(/\s+/g, '-')}.pdf`
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': pdf.length
+    })
+
+    res.send(pdf)
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message })
+  }
+}
+
+module.exports = { downloadReceipt, downloadReportCard, downloadCOR }

@@ -5,10 +5,18 @@ const {
   getStudent,
   updateStudentRecord,
   updateStudentProfile,
-  getMyRecord
+  getMyRecord,
+  getStudentGWA,
+  getSemesterGWA,
+  recalculateGWA
 } = require('../controllers/studentController')
 const { protect } = require('../middleware/auth')
 const { allowRoles } = require('../middleware/roles')
+
+// GWA routes — before /:id to avoid conflict
+router.get('/:id/gwa', protect, getStudentGWA)
+router.get('/:id/gwa/semester', protect, getSemesterGWA)
+router.post('/:id/gwa/recalculate', protect, allowRoles('superadmin', 'registrar'), recalculateGWA)
 
 router.get('/my', protect, allowRoles('student'), getMyRecord)
 router.get('/', protect, allowRoles('superadmin', 'registrar'), getStudents)

@@ -2,23 +2,20 @@ const express = require('express')
 const router = express.Router()
 const {
   getEnrollments,
-  getEnrollment,
+  getMyEnrollments,
   submitEnrollment,
   updateEnrollmentStatus,
-  getMyEnrollment,
+  bulkUpdateEnrollment,
   getAvailableSubjects
 } = require('../controllers/enrollmentController')
 const { protect } = require('../middleware/auth')
 const { allowRoles } = require('../middleware/roles')
 
-// Student routes
-router.get('/my', protect, allowRoles('student'), getMyEnrollment)
-router.get('/available-subjects', protect, allowRoles('student'), getAvailableSubjects)
-router.post('/', protect, allowRoles('student'), submitEnrollment)
-
-// Registrar/Admin routes
+router.get('/available', protect, allowRoles('student'), getAvailableSubjects)
+router.get('/my', protect, allowRoles('student'), getMyEnrollments)
 router.get('/', protect, allowRoles('superadmin', 'registrar'), getEnrollments)
-router.get('/:id', protect, allowRoles('superadmin', 'registrar'), getEnrollment)
-router.put('/:id/status', protect, allowRoles('superadmin', 'registrar'), updateEnrollmentStatus)
+router.post('/', protect, allowRoles('student'), submitEnrollment)
+router.put('/bulk', protect, allowRoles('superadmin', 'registrar'), bulkUpdateEnrollment)
+router.put('/:id', protect, allowRoles('superadmin', 'registrar'), updateEnrollmentStatus)
 
 module.exports = router

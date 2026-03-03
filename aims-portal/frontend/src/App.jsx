@@ -36,7 +36,11 @@ import UserManagement from "./pages/admin/UserManagement";
 import Subjects from "./pages/admin/Subjects";
 import Sections from "./pages/admin/Sections";
 import GuestRoute from "./components/shared/GuestRoute";
-import NotFound from './pages/NotFound'
+import NotFound from "./pages/NotFound";
+import Departments from "./pages/admin/Departments";
+import Curriculum from "./pages/admin/Curriculum";
+import ChangePassword from "./pages/shared/ChangePassword";
+import Profile from "./pages/shared/Profile";
 
 import RegistrarDashboard from "./pages/registrar/Dashboard";
 import CashierDashboard from "./pages/cashier/Dashboard";
@@ -51,7 +55,6 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-
           <Route
             path="/login"
             element={
@@ -77,6 +80,104 @@ function App() {
             }
           />
           <Route path="/" element={<Navigate to="/login" replace />} />
+
+          <Route
+            path="/superadmin/change-password"
+            element={
+              <ProtectedRoute roles={["superadmin"]}>
+                <ChangePassword />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/registrar/change-password"
+            element={
+              <ProtectedRoute roles={["registrar"]}>
+                <ChangePassword />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cashier/change-password"
+            element={
+              <ProtectedRoute roles={["cashier"]}>
+                <ChangePassword />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher/change-password"
+            element={
+              <ProtectedRoute roles={["teacher"]}>
+                <ChangePassword />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/change-password"
+            element={
+              <ProtectedRoute roles={["student"]}>
+                <ChangePassword />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/parent/change-password"
+            element={
+              <ProtectedRoute roles={["parent"]}>
+                <ChangePassword />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/superadmin/profile"
+            element={
+              <ProtectedRoute roles={["superadmin"]}>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/registrar/profile"
+            element={
+              <ProtectedRoute roles={["registrar"]}>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cashier/profile"
+            element={
+              <ProtectedRoute roles={["cashier"]}>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher/profile"
+            element={
+              <ProtectedRoute roles={["teacher"]}>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/profile"
+            element={
+              <ProtectedRoute roles={["student"]}>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/parent/profile"
+            element={
+              <ProtectedRoute roles={["parent"]}>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Superadmin */}
           <Route
@@ -139,6 +240,24 @@ function App() {
             element={
               <ProtectedRoute roles={["superadmin", "registrar"]}>
                 <Sections />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/superadmin/departments"
+            element={
+              <ProtectedRoute roles={["superadmin", "registrar"]}>
+                <Departments />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/superadmin/curriculum"
+            element={
+              <ProtectedRoute roles={["superadmin", "registrar"]}>
+                <Curriculum />
               </ProtectedRoute>
             }
           />

@@ -1,139 +1,85 @@
 const TermGrade = require("../models/TermGrade");
-const ClassSchedule = require("../models/ClassSchedule");
+const Schedule = require("../models/ClassSchedule");
 const Enrollment = require("../models/Enrollment");
-const { computeGradeForTerm } = require("../utils/grading");
+const Semester = require("../models/Semester");
+const { isTermLocked, getLockStatus } = require("../utils/gradeLock");
+const { computeGWAForStudent } = require("./studentController");
 
-const TERMS = ["prelim", "midterm", "finals"];
-
-// Get all students enrolled in a schedule
-const getEnrolledStudents = async (scheduleId) => {
-  const enrollments = await Enrollment.find({
-    status: "approved",
-    subjects: scheduleId,
-  }).populate("studentId", "name email");
-  return enrollments.map((e) => e.studentId).filter(Boolean);
-};
-
-// Get previous term grades for cumulative computation
-const getPreviousGrades = async (studentId, scheduleId) => {
-  const grades = await TermGrade.find({ studentId, scheduleId });
-  const map = {};
-  grades.forEach((g) => {
-    map[g.term] = g.cumulativeGrade;
-  });
-  return map;
-};
-
-const getGradesBySchedule = async (req, res) => {
+// Get gradesheet for a schedule (teacher view)
+const getGradesheet = async (req, res) => {
   try {
-    const { scheduleId, term } = req.query;
+    const { scheduleId } = req.query;
     if (!scheduleId) {
       return res
         .status(400)
         .json({ status: "error", message: "scheduleId is required" });
     }
 
-    const filter = { scheduleId };
-    if (term) filter.term = term;
+    const schedule = await Schedule.findById(scheduleId)
+      .populate("subjectId", "name code units")
+      .populate("semesterId", "schoolYear term startDate")
+      .populate("sectionId", "name");
 
-    const grades = await TermGrade.find(filter)
-      .populate("studentId", "name email")
-      .populate("scheduleId")
-      .sort({ term: 1 });
-
-    res.json({ status: "success", message: "Grades fetched", data: grades });
-  } catch (error) {
-    res.status(500).json({ status: "error", message: error.message });
-  }
-};
-
-const getMyGrades = async (req, res) => {
-  try {
-    const { semesterId } = req.query;
-    const filter = { studentId: req.user._id };
-    if (semesterId) filter.semesterId = semesterId;
-
-    const grades = await TermGrade.find(filter)
-      .populate({
-        path: "scheduleId",
-        populate: { path: "subjectId", select: "name code units" },
-      })
-      .sort({ term: 1 });
-
-    // Group by scheduleId
-    const grouped = {};
-    for (const g of grades) {
-      const key = g.scheduleId?._id?.toString();
-      if (!key) continue;
-      if (!grouped[key]) {
-        grouped[key] = {
-          schedule: g.scheduleId,
-          subject: g.scheduleId?.subjectId,
-          terms: {},
-        };
-      }
-      if (g.isPublished) {
-        grouped[key].terms[g.term] = {
-          classStanding: g.classStanding,
-          cumulativeGrade: g.cumulativeGrade,
-          term: g.term,
-        };
-      }
+    if (!schedule) {
+      return res
+        .status(404)
+        .json({ status: "error", message: "Schedule not found" });
     }
+
+    // Only the assigned teacher or admin can view
+    if (
+      req.user.role === "teacher" &&
+      schedule.teacherId.toString() !== req.user._id.toString()
+    ) {
+      return res
+        .status(403)
+        .json({ status: "error", message: "Access denied" });
+    }
+
+    // Get enrolled students
+    const enrollments = await Enrollment.find({
+      scheduleId,
+      status: "approved",
+    }).populate("studentId", "name email");
+
+    // Get all grades for this schedule
+    const grades = await TermGrade.find({ scheduleId });
+
+    // Get lock status for each term
+    const lockStatus = getLockStatus(schedule.semesterId);
+
+    // Build gradesheet
+    const sheet = enrollments.map((enrollment) => {
+      const studentGrades = {};
+      for (const term of ["prelim", "midterm", "finals"]) {
+        const g = grades.find(
+          (gr) =>
+            gr.studentId.toString() === enrollment.studentId._id.toString() &&
+            gr.term === term,
+        );
+        studentGrades[term] = g || null;
+      }
+      return {
+        student: enrollment.studentId,
+        grades: studentGrades,
+      };
+    });
 
     res.json({
       status: "success",
-      message: "Grades fetched",
-      data: Object.values(grouped),
+      message: "Gradesheet fetched",
+      data: {
+        schedule,
+        sheet,
+        lockStatus,
+      },
     });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }
 };
 
-const getGradesheet = async (req, res) => {
-  try {
-    const { scheduleId, term } = req.query;
-    if (!scheduleId || !term) {
-      return res
-        .status(400)
-        .json({ status: "error", message: "scheduleId and term are required" });
-    }
-
-    const students = await getEnrolledStudents(scheduleId);
-
-    const sheet = await Promise.all(
-      students.map(async (student) => {
-        let grade = await TermGrade.findOne({
-          studentId: student._id,
-          scheduleId,
-          term,
-        });
-        if (!grade) {
-          grade = {
-            studentId: student,
-            scheduleId,
-            term,
-            quizScores: [],
-            activityScores: [],
-            examScore: 0,
-            examMaxScore: 0,
-            classStanding: 0,
-            cumulativeGrade: 0,
-            isPublished: false,
-            _id: null,
-          };
-        }
-        return { student, grade };
-      }),
-    );
-
-    res.json({ status: "success", message: "Gradesheet fetched", data: sheet });
-  } catch (error) {
-    res.status(500).json({ status: "error", message: error.message });
-  }
-};
-
+// Get grades (filtered)
 const getGrades = async (req, res) => {
   try {
     const filter = {};
@@ -142,6 +88,11 @@ const getGrades = async (req, res) => {
     if (req.query.scheduleId) filter.scheduleId = req.query.scheduleId;
     if (req.query.term) filter.term = req.query.term;
 
+    // Students and parents only see published grades
+    if (["student", "parent"].includes(req.user.role)) {
+      filter.isPublished = true;
+    }
+
     const grades = await TermGrade.find(filter)
       .populate({
         path: "scheduleId",
@@ -156,75 +107,195 @@ const getGrades = async (req, res) => {
   }
 };
 
+// Get student's own grades
+const getMyGrades = async (req, res) => {
+  try {
+    const filter = {
+      studentId: req.user._id,
+      isPublished: true,
+    };
+    if (req.query.semesterId) filter.semesterId = req.query.semesterId;
+    if (req.query.scheduleId) filter.scheduleId = req.query.scheduleId;
+
+    const grades = await TermGrade.find(filter)
+      .populate({
+        path: "scheduleId",
+        populate: { path: "subjectId", select: "name code units" },
+      })
+      .sort({ term: 1 });
+
+    res.json({ status: "success", message: "Grades fetched", data: grades });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+};
+
+// Compute class standing and term grade
+const computeGrades = (data) => {
+  const { quizzes, activities, assignments, examScore, examTotal } = data;
+
+  const avg = (arr) => {
+    if (!arr || arr.length === 0) return 0;
+    const percentages = arr
+      .filter((item) => item.total > 0)
+      .map((item) => (item.score / item.total) * 100);
+    if (percentages.length === 0) return 0;
+    return percentages.reduce((a, b) => a + b, 0) / percentages.length;
+  };
+
+  const quizAvg = avg(quizzes);
+  const activityAvg = avg(activities);
+  const assignmentAvg = avg(assignments);
+  const examPct = examTotal > 0 ? (examScore / examTotal) * 100 : 0;
+
+  // Class standing = average of all components except exam
+  const components = [];
+  if (quizzes?.length > 0) components.push(quizAvg);
+  if (activities?.length > 0) components.push(activityAvg);
+  if (assignments?.length > 0) components.push(assignmentAvg);
+
+  const classStanding =
+    components.length > 0
+      ? components.reduce((a, b) => a + b, 0) / components.length
+      : 0;
+
+  // Term grade = (classStanding * 0.5) + (exam% * 0.5)
+  const termGrade = classStanding * 0.5 + examPct * 0.5;
+
+  return { classStanding, termGrade, examPct };
+};
+
+// Compute cumulative grade based on term
+const computeCumulative = async (studentId, scheduleId, term, termGrade) => {
+  if (term === "prelim") return termGrade;
+
+  if (term === "midterm") {
+    const prelim = await TermGrade.findOne({
+      studentId,
+      scheduleId,
+      term: "prelim",
+    });
+    const prelimGrade = prelim?.cumulativeGrade || 0;
+    return termGrade * (2 / 3) + prelimGrade * (1 / 3);
+  }
+
+  if (term === "finals") {
+    const midterm = await TermGrade.findOne({
+      studentId,
+      scheduleId,
+      term: "midterm",
+    });
+    const midtermGrade = midterm?.cumulativeGrade || 0;
+    return termGrade * (2 / 3) + midtermGrade * (1 / 3);
+  }
+
+  return termGrade;
+};
+
+// Upsert grade (create or update)
 const upsertGrade = async (req, res) => {
   try {
     const {
       studentId,
       scheduleId,
-      semesterId,
       term,
-      quizScores,
-      activityScores,
+      quizzes,
+      activities,
+      assignments,
       examScore,
-      examMaxScore,
+      examTotal,
     } = req.body;
 
-    if (!studentId || !scheduleId || !semesterId || !term) {
+    if (!studentId || !scheduleId || !term) {
       return res.status(400).json({
         status: "error",
-        message: "studentId, scheduleId, semesterId, and term are required",
+        message: "studentId, scheduleId, and term are required",
       });
     }
 
-    if (!TERMS.includes(term)) {
-      return res.status(400).json({ status: "error", message: "Invalid term" });
-    }
+    // Get schedule to find semester
+    const schedule = await Schedule.findById(scheduleId).populate("semesterId");
 
-    // Verify teacher owns this schedule
-    const schedule = await ClassSchedule.findById(scheduleId);
     if (!schedule) {
       return res
         .status(404)
         .json({ status: "error", message: "Schedule not found" });
     }
 
+    // Check teacher ownership
     if (
       req.user.role === "teacher" &&
       schedule.teacherId.toString() !== req.user._id.toString()
     ) {
+      return res
+        .status(403)
+        .json({ status: "error", message: "Access denied" });
+    }
+
+    // Check lock status
+    const locked = isTermLocked(schedule.semesterId, term);
+    if (locked) {
+      // Only superadmin and registrar can override locks
+      if (!["superadmin", "registrar"].includes(req.user.role)) {
+        return res.status(403).json({
+          status: "error",
+          message: `${term.charAt(0).toUpperCase() + term.slice(1)} grades are locked. The grading period has ended.`,
+        });
+      }
+    }
+
+    // Check if existing grade is locked in DB
+    const existing = await TermGrade.findOne({ studentId, scheduleId, term });
+    if (
+      existing?.isLocked &&
+      !["superadmin", "registrar"].includes(req.user.role)
+    ) {
       return res.status(403).json({
         status: "error",
-        message: "You are not assigned to this class",
+        message: `${term} grades are locked and cannot be edited.`,
       });
     }
 
-    const previousGrades = await getPreviousGrades(studentId, scheduleId);
+    // Compute grades
+    const { classStanding, termGrade } = computeGrades({
+      quizzes,
+      activities,
+      assignments,
+      examScore,
+      examTotal,
+    });
+
+    const cumulativeGrade = await computeCumulative(
+      studentId,
+      scheduleId,
+      term,
+      termGrade,
+    );
 
     const gradeData = {
-      quizScores: quizScores || [],
-      activityScores: activityScores || [],
+      studentId,
+      scheduleId,
+      semesterId: schedule.semesterId._id,
+      term,
+      quizzes: quizzes || [],
+      activities: activities || [],
+      assignments: assignments || [],
       examScore: examScore || 0,
-      examMaxScore: examMaxScore || 0,
+      examTotal: examTotal || 100,
+      classStanding: parseFloat(classStanding.toFixed(2)),
+      termGrade: parseFloat(termGrade.toFixed(2)),
+      cumulativeGrade: parseFloat(cumulativeGrade.toFixed(2)),
+      isLocked: locked,
+      updatedAt: new Date(),
     };
-
-    const computed = computeGradeForTerm(gradeData, term, previousGrades);
 
     const grade = await TermGrade.findOneAndUpdate(
       { studentId, scheduleId, term },
-      {
-        studentId,
-        scheduleId,
-        semesterId,
-        term,
-        ...gradeData,
-        classStanding: computed.classStanding,
-        termGrade: computed.classStanding,
-        cumulativeGrade: computed.cumulativeGrade,
-      },
-      { new: true, upsert: true, runValidators: true },
+      gradeData,
+      { upsert: true, new: true, runValidators: true },
     );
 
-    // Recompute downstream terms if they exist
+    // If midterm or finals updated, cascade to downstream terms
     if (term === "prelim") {
       const midterm = await TermGrade.findOne({
         studentId,
@@ -232,15 +303,11 @@ const upsertGrade = async (req, res) => {
         term: "midterm",
       });
       if (midterm) {
-        const updatedPrevious = { prelim: computed.cumulativeGrade };
-        const midtermComputed = computeGradeForTerm(
-          midterm,
-          "midterm",
-          updatedPrevious,
-        );
-        midterm.classStanding = midtermComputed.classStanding;
-        midterm.cumulativeGrade = midtermComputed.cumulativeGrade;
-        await midterm.save();
+        const newMidtermCumulative =
+          midterm.termGrade * (2 / 3) + cumulativeGrade * (1 / 3);
+        await TermGrade.findByIdAndUpdate(midterm._id, {
+          cumulativeGrade: parseFloat(newMidtermCumulative.toFixed(2)),
+        });
 
         const finals = await TermGrade.findOne({
           studentId,
@@ -248,12 +315,11 @@ const upsertGrade = async (req, res) => {
           term: "finals",
         });
         if (finals) {
-          const finalsComputed = computeGradeForTerm(finals, "finals", {
-            midterm: midtermComputed.cumulativeGrade,
+          const newFinalsCumulative =
+            finals.termGrade * (2 / 3) + newMidtermCumulative * (1 / 3);
+          await TermGrade.findByIdAndUpdate(finals._id, {
+            cumulativeGrade: parseFloat(newFinalsCumulative.toFixed(2)),
           });
-          finals.classStanding = finalsComputed.classStanding;
-          finals.cumulativeGrade = finalsComputed.cumulativeGrade;
-          await finals.save();
         }
       }
     }
@@ -265,12 +331,11 @@ const upsertGrade = async (req, res) => {
         term: "finals",
       });
       if (finals) {
-        const finalsComputed = computeGradeForTerm(finals, "finals", {
-          midterm: computed.cumulativeGrade,
+        const newFinalsCumulative =
+          finals.termGrade * (2 / 3) + cumulativeGrade * (1 / 3);
+        await TermGrade.findByIdAndUpdate(finals._id, {
+          cumulativeGrade: parseFloat(newFinalsCumulative.toFixed(2)),
         });
-        finals.classStanding = finalsComputed.classStanding;
-        finals.cumulativeGrade = finalsComputed.cumulativeGrade;
-        await finals.save();
       }
     }
 
@@ -280,16 +345,19 @@ const upsertGrade = async (req, res) => {
   }
 };
 
+// Publish grades for a schedule and term
 const publishGrades = async (req, res) => {
   try {
     const { scheduleId, term } = req.body;
+
     if (!scheduleId || !term) {
-      return res
-        .status(400)
-        .json({ status: "error", message: "scheduleId and term are required" });
+      return res.status(400).json({
+        status: "error",
+        message: "scheduleId and term are required",
+      });
     }
 
-    const schedule = await ClassSchedule.findById(scheduleId);
+    const schedule = await Schedule.findById(scheduleId);
     if (!schedule) {
       return res
         .status(404)
@@ -300,38 +368,64 @@ const publishGrades = async (req, res) => {
       req.user.role === "teacher" &&
       schedule.teacherId.toString() !== req.user._id.toString()
     ) {
-      return res.status(403).json({
-        status: "error",
-        message: "You are not assigned to this class",
-      });
+      return res
+        .status(403)
+        .json({ status: "error", message: "Access denied" });
     }
 
     await TermGrade.updateMany({ scheduleId, term }, { isPublished: true });
 
-    res.json({
-      status: "success",
-      message: `${term} grades published`,
-      data: null,
-    });
+    const grades = await TermGrade.find({ scheduleId, term });
+    const studentIds = [...new Set(grades.map((g) => g.studentId.toString()))];
+    for (const studentId of studentIds) {
+      await computeGWAForStudent(studentId);
+    }
+
+    res.json({ status: "success", message: `${term} grades published` });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }
 };
 
+// Unpublish grades
 const unpublishGrades = async (req, res) => {
   try {
     const { scheduleId, term } = req.body;
-    if (!scheduleId || !term) {
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) {
       return res
-        .status(400)
-        .json({ status: "error", message: "scheduleId and term are required" });
+        .status(404)
+        .json({ status: "error", message: "Schedule not found" });
+    }
+
+    if (
+      req.user.role === "teacher" &&
+      schedule.teacherId.toString() !== req.user._id.toString()
+    ) {
+      return res
+        .status(403)
+        .json({ status: "error", message: "Access denied" });
     }
 
     await TermGrade.updateMany({ scheduleId, term }, { isPublished: false });
+
+    res.json({ status: "success", message: `${term} grades unpublished` });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+};
+
+// Manual lock override (superadmin/registrar only)
+const overrideLock = async (req, res) => {
+  try {
+    const { scheduleId, term, lock } = req.body;
+
+    await TermGrade.updateMany({ scheduleId, term }, { isLocked: lock });
+
     res.json({
       status: "success",
-      message: `${term} grades unpublished`,
-      data: null,
+      message: `Grades ${lock ? "locked" : "unlocked"} for ${term}`,
     });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
@@ -339,11 +433,11 @@ const unpublishGrades = async (req, res) => {
 };
 
 module.exports = {
-  getGradesBySchedule,
-  getMyGrades,
   getGradesheet,
   getGrades,
+  getMyGrades,
   upsertGrade,
   publishGrades,
   unpublishGrades,
+  overrideLock,
 };
