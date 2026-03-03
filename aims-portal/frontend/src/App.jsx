@@ -41,6 +41,8 @@ import Departments from "./pages/admin/Departments";
 import Curriculum from "./pages/admin/Curriculum";
 import ChangePassword from "./pages/shared/ChangePassword";
 import Profile from "./pages/shared/Profile";
+import INCGrades from "./pages/registrar/INCGrades";
+import RemovalExams from './pages/registrar/RemovalExams'
 
 import RegistrarDashboard from "./pages/registrar/Dashboard";
 import CashierDashboard from "./pages/cashier/Dashboard";
@@ -359,6 +361,24 @@ function App() {
             element={
               <ProtectedRoute roles={["superadmin", "registrar"]}>
                 <ReportCards />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/registrar/inc-grades"
+            element={
+              <ProtectedRoute roles={["registrar", "superadmin"]}>
+                <INCGrades />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/registrar/removal-exams"
+            element={
+              <ProtectedRoute roles={["registrar", "superadmin"]}>
+                <RemovalExams />
               </ProtectedRoute>
             }
           />

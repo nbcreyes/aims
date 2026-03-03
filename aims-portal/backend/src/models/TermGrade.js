@@ -20,6 +20,23 @@ const termGradeSchema = new mongoose.Schema({
   isLocked: { type: Boolean, default: false },
   isPublished: { type: Boolean, default: false },
 
+  // INC fields
+  isINC: { type: Boolean, default: false },
+  incReason: { type: String, default: "" },
+  incDeadline: { type: Date },
+  incResolvedAt: { type: Date },
+  incResolvedGrade: { type: Number },
+  incDefaulted: { type: Boolean, default: false }, // true = deadline passed, defaulted to 5.0
+
+  // Removal exam fields
+  isEligibleForRemoval: { type: Boolean, default: false },
+  removalExamScore: { type: Number },
+  removalExamTotal: { type: Number },
+  removalExamDate: { type: Date },
+  removalExamGrade: { type: Number }, // computed grade after removal
+  removalPassed: { type: Boolean },
+  removalAdministeredBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+
   // Score components
   quizzes: [{ score: Number, total: Number }],
   activities: [{ score: Number, total: Number }],
