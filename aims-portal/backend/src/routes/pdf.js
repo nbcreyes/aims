@@ -1,6 +1,6 @@
 const express = require('express')
 const router = express.Router()
-const { downloadReceipt, downloadReportCard, downloadCOR } = require('../controllers/pdfController')
+const { downloadReceipt, downloadReportCard, downloadCOR, downloadTOR } = require('../controllers/pdfController')
 const { protect } = require('../middleware/auth')
 const { allowRoles } = require('../middleware/roles')
 
@@ -23,6 +23,13 @@ router.get(
   protect,
   allowRoles('superadmin', 'registrar', 'student'),
   downloadCOR
+)
+
+router.get(
+  '/tor/:studentId',
+  protect,
+  allowRoles('superadmin', 'registrar', 'student'),
+  downloadTOR
 )
 
 module.exports = router

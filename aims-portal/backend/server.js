@@ -42,6 +42,8 @@ app.use('/api/departments', require('./src/routes/departments'))
 app.use('/api/curriculum', require('./src/routes/curriculum'))
 app.use('/api/inc', require('./src/routes/inc'))
 app.use('/api/removal', require('./src/routes/removal'))
+app.use('/api/grade-lock', require('./src/routes/gradeLock'))
+app.use('/api/students', require('./src/routes/gwa'))
 
 autoLockGrades()
 setInterval(autoLockGrades, 60 * 60 * 1000)

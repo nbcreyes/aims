@@ -42,7 +42,10 @@ import Curriculum from "./pages/admin/Curriculum";
 import ChangePassword from "./pages/shared/ChangePassword";
 import Profile from "./pages/shared/Profile";
 import INCGrades from "./pages/registrar/INCGrades";
-import RemovalExams from './pages/registrar/RemovalExams'
+import RemovalExams from "./pages/registrar/RemovalExams";
+import GradeLock from "./pages/registrar/GradeLock";
+import Transcript from "./pages/registrar/Transcript";
+import StudentTranscript from "./pages/student/Transcript";
 
 import RegistrarDashboard from "./pages/registrar/Dashboard";
 import CashierDashboard from "./pages/cashier/Dashboard";
@@ -379,6 +382,32 @@ function App() {
             element={
               <ProtectedRoute roles={["registrar", "superadmin"]}>
                 <RemovalExams />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/registrar/grade-lock"
+            element={
+              <ProtectedRoute roles={["registrar", "superadmin"]}>
+                <GradeLock />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/registrar/transcript"
+            element={
+              <ProtectedRoute roles={["registrar", "superadmin"]}>
+                <Transcript />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/transcript"
+            element={
+              <ProtectedRoute roles={["student"]}>
+                <StudentTranscript />
               </ProtectedRoute>
             }
           />

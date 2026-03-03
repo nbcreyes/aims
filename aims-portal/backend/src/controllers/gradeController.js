@@ -36,6 +36,22 @@ const getGradesheet = async (req, res) => {
         .json({ status: "error", message: "Access denied" });
     }
 
+    // Check if grade is locked
+    const existingGrade = await TermGrade.findOne({
+      studentId,
+      scheduleId,
+      term,
+    });
+    if (existingGrade?.isLocked) {
+      if (!["superadmin", "registrar"].includes(req.user.role)) {
+        return res.status(403).json({
+          status: "error",
+          message:
+            "This grade is locked. Contact the registrar to make changes.",
+        });
+      }
+    }
+
     // Get enrolled students
     const enrollments = await Enrollment.find({
       scheduleId,

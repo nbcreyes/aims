@@ -19,6 +19,8 @@ const termGradeSchema = new mongoose.Schema({
   term: { type: String, enum: ["prelim", "midterm", "finals"], required: true },
   isLocked: { type: Boolean, default: false },
   isPublished: { type: Boolean, default: false },
+  lockedAt: { type: Date },
+  lockedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 
   // INC fields
   isINC: { type: Boolean, default: false },

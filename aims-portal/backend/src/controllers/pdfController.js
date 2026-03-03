@@ -10,6 +10,8 @@ const StudentRecord = require('../models/StudentRecord')
 const Semester = require('../models/Semester')
 const TermGrade = require('../models/TermGrade')
 const ClassSchedule = require('../models/ClassSchedule')
+const { torTemplate } = require('../utils/torTemplate')
+const { getTranscript: fetchTranscript } = require('./gwaController')
 
 const downloadReceipt = async (req, res) => {
   try {
@@ -165,4 +167,85 @@ const downloadCOR = async (req, res) => {
   }
 }
 
-module.exports = { downloadReceipt, downloadReportCard, downloadCOR }
+const downloadTOR = async (req, res) => {
+  try {
+    const { studentId } = req.params
+
+    if (req.user.role === 'student' && studentId !== req.user._id.toString()) {
+      return res.status(403).json({ status: 'error', message: 'Access denied' })
+    }
+
+    const student = await User.findById(studentId).select('-password')
+    if (!student) {
+      return res.status(404).json({ status: 'error', message: 'Student not found' })
+    }
+
+    const record = await StudentRecord.findOne({ studentId })
+      .populate('programId', 'name code')
+
+    const grades = await TermGrade.find({ studentId })
+      .populate({
+        path: 'scheduleId',
+        populate: { path: 'subjectId', select: 'name code units' }
+      })
+      .populate('semesterId', 'schoolYear term')
+
+    // Group by semester then schedule
+    const semesterMap = {}
+    for (const g of grades) {
+      const semKey = g.semesterId?._id?.toString()
+      if (!semKey) continue
+      if (!semesterMap[semKey]) {
+        semesterMap[semKey] = { semester: g.semesterId, subjects: {} }
+      }
+      const schedKey = g.scheduleId?._id?.toString()
+      if (!schedKey) continue
+      if (!semesterMap[semKey].subjects[schedKey]) {
+        semesterMap[semKey].subjects[schedKey] = {
+          schedule: g.scheduleId,
+          subject: g.scheduleId?.subjectId,
+          terms: {}
+        }
+      }
+      semesterMap[semKey].subjects[schedKey].terms[g.term] = g
+    }
+
+    const { computeGWA } = require('./gwaController')
+
+    const semesters = Object.values(semesterMap).map(item => {
+      const allGrades = grades.filter(g =>
+        g.semesterId?._id?.toString() === item.semester._id?.toString()
+      )
+      const subjects = Object.values(item.subjects)
+      return {
+        semester: item.semester,
+        subjects,
+        semesterGWA: computeGWA(allGrades),
+        totalUnits: subjects.reduce((sum, s) => {
+          const finals = s.terms['finals']
+          if (finals?.isPublished && finals?.cumulativeGrade >= 75) {
+            return sum + (s.subject?.units || 0)
+          }
+          return sum
+        }, 0)
+      }
+    })
+
+    const overallGWA = computeGWA(grades)
+    const totalUnitsEarned = semesters.reduce((sum, s) => sum + s.totalUnits, 0)
+
+    const html = torTemplate(student, record, semesters, overallGWA, totalUnitsEarned)
+    const pdf = await generatePDF(html)
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="TOR-${student.name.replace(/\s+/g, '-')}.pdf"`,
+      'Content-Length': pdf.length
+    })
+    res.send(pdf)
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message })
+  }
+}
+
+module.exports = { downloadReceipt, downloadReportCard, downloadCOR, downloadTOR }

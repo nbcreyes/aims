@@ -43,6 +43,8 @@ const NAV = {
     { label: "Change Password", path: "/registrar/change-password" },
     { label: "INC Grades", path: "/registrar/inc-grades" },
     { label: "Removal Exams", path: "/registrar/removal-exams" },
+    { label: "Grade Lock", path: "/registrar/grade-lock" },
+    { label: "Transcript", path: "/registrar/transcript" },
   ],
   cashier: [
     { label: "Dashboard", path: "/cashier/dashboard" },
@@ -72,6 +74,7 @@ const NAV = {
     { label: "Announcements", path: "/student/announcements" },
     { label: "Profile", path: "/student/profile" },
     { label: "Change Password", path: "/student/change-password" },
+    { label: "Transcript", path: "/student/transcript" },
   ],
   parent: [
     { label: "Dashboard", path: "/parent/dashboard" },

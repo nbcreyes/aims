@@ -1,5 +1,8 @@
 const express = require('express')
 const router = express.Router()
+const { protect } = require('../middleware/auth')
+const { allowRoles } = require('../middleware/roles')
+
 const {
   getStudents,
   getStudent,
@@ -8,20 +11,34 @@ const {
   getMyRecord,
   getStudentGWA,
   getSemesterGWA,
-  recalculateGWA
+  recalculateGWA,
+  computeGWAForStudent
 } = require('../controllers/studentController')
-const { protect } = require('../middleware/auth')
-const { allowRoles } = require('../middleware/roles')
 
-// GWA routes — before /:id to avoid conflict
-router.get('/:id/gwa', protect, getStudentGWA)
-router.get('/:id/gwa/semester', protect, getSemesterGWA)
-router.post('/:id/gwa/recalculate', protect, allowRoles('superadmin', 'registrar'), recalculateGWA)
+const { getTranscript } = require('../controllers/gwaController')
 
-router.get('/my', protect, allowRoles('student'), getMyRecord)
-router.get('/', protect, allowRoles('superadmin', 'registrar'), getStudents)
-router.get('/:id', protect, allowRoles('superadmin', 'registrar', 'student'), getStudent)
-router.put('/:id/record', protect, allowRoles('superadmin', 'registrar'), updateStudentRecord)
-router.put('/:id/profile', protect, allowRoles('superadmin', 'registrar', 'student'), updateStudentProfile)
+// ─── Student List & Profile ───────────────────────────────────────────────────
+
+router.get('/', protect, allowRoles('superadmin', 'registrar', 'teacher'), getStudents)
+
+router.get('/me', protect, allowRoles('student'), getMyRecord)
+
+router.get('/:studentId', protect, allowRoles('superadmin', 'registrar', 'teacher', 'student'), getStudent)
+
+router.put('/:studentId/record', protect, allowRoles('superadmin', 'registrar'), updateStudentRecord)
+
+router.put('/:studentId/profile', protect, allowRoles('superadmin', 'registrar', 'student'), updateStudentProfile)
+
+// ─── GWA ─────────────────────────────────────────────────────────────────────
+
+router.get('/:studentId/gwa', protect, allowRoles('superadmin', 'registrar', 'student'), getStudentGWA)
+
+router.get('/:studentId/gwa/:semesterId', protect, allowRoles('superadmin', 'registrar', 'student'), getSemesterGWA)
+
+router.post('/:studentId/gwa/recalculate', protect, allowRoles('superadmin', 'registrar'), recalculateGWA)
+
+// ─── Transcript ───────────────────────────────────────────────────────────────
+
+router.get('/:studentId/transcript', protect, allowRoles('superadmin', 'registrar', 'student'), getTranscript)
 
 module.exports = router
